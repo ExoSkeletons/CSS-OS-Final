@@ -10,3 +10,16 @@ add_executable(main main.cpp
         pthread_patterns.cpp
         pthread_patterns.hpp
 )
+
+add_executable(server server.cpp
+        fd_polling.cpp
+        fd_polling.hpp
+        pthread_patterns.cpp
+        pthread_patterns.hpp
+)
+add_executable(client client.cpp
+        fd_polling.cpp
+        fd_polling.hpp
+        pthread_patterns.cpp
+        pthread_patterns.hpp
+)
