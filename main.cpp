@@ -1,9 +1,8 @@
 #include <iostream>
 
-#include "LF.hpp"
-#include "Pipeline.hpp"
+#include "pthread_patterns.hpp"
 
-typedef Pipeline<int, int> NumPipeline;
+typedef pl::Pipeline<int, int> NumPipeline;
 
 
 int *s;
@@ -32,15 +31,15 @@ void *print(void *arg) {
 }
 
 void pipe_add(const NumPipeline::Work *work) {
-	(*work->payload) += 5;
+	*work->payload += 5;
 }
 
 void pipe_print(const NumPipeline::Work *work) {
-	std::cout << work->context << " " << *work->payload << std::endl;
+	std::cout << work->context << ": " << *work->payload << std::endl;
 }
 
 int main() {
-	auto fs = LF(6);
+	auto fs = lf::LF(6);
 
 	const auto args = new int[]{2, 45};
 	int rs, rm, rp;
@@ -57,9 +56,11 @@ int main() {
 	const auto printer = p.startActiveObject(pipe_print);
 
 	auto job = NumPipeline::Job();
-	job.setContext(new Pipeline<int, int>::Work(9999, new int(4)));
+	job.setContext(new pl::Pipeline<int, int>::Work(9999, new int(4)));
 	job.addStage(printer);
 	job.addStage(adder);
+	job.addStage(printer);
+	job.addStage(printer);
 	job.addStage(adder);
 	job.addStage(printer);
 	job.start();
