@@ -182,6 +182,7 @@ namespace proactor {
 				delete cr;
 				continue;
 			}
+			printf("started client thread %lu for client fd %d\n", thread, client_fd);
 			// track client thread
 			pthread_mutex_lock(&proactor->client_mutex);
 			proactor->client_threads.push_back(thread);
@@ -204,6 +205,7 @@ namespace proactor {
 			delete fdp;
 			return -1;
 		}
+		printf("started connection accept thread %lu for socket %d\n", accept_thread, sock_fd);
 		// track new proactor
 		proactors_threads.insert(std::pair(accept_thread, fdp));
 
@@ -220,7 +222,7 @@ namespace proactor {
 		// stop proactor
 		const auto [thread, proactor] = *it;
 
-		printf("stopping server connection thread %lu\n", thread);
+		printf("stopping connection accept thread %lu for socket %d\n", thread, proactor->socket);
 		// cancel proactor socket thread
 		if (pthread_cancel(thread) != 0) {
 			perror("proactor cancel failed");
