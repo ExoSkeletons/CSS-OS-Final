@@ -13,23 +13,23 @@
 #include <algorithm>
 
 AlgorithmPtr createAlgorithm(const std::string &name) {
-    // Convert name to uppercase for case-insensitive comparison
-    std::string upper;
-    upper.reserve(name.size());
-    for (char c : name) {
-        upper.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-    }
-    if (upper == "EULER") {
-        return std::make_unique<EulerAlgorithm>();
-    } else if (upper == "MST") {
-        return std::make_unique<MSTAlgorithm>();
-    } else if (upper == "SCC") {
-        return std::make_unique<SCCAlgorithm>();
-    } else if (upper == "MAXFLOW") {
-        return std::make_unique<MaxFlowAlgorithm>();
-    } else if (upper == "MAXCLIQUE") {
-        return std::make_unique<MaxCliqueAlgorithm>();
-    } else {
-        return nullptr;
-    }
+	// Convert name to uppercase for case-insensitive comparison
+	std::string upper;
+	upper.reserve(name.size());
+	for (const char c: name)
+		upper.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+	switch (upper) {
+		case "EULER":
+			return std::make_unique<EulerAlgorithm>();
+		case "MST":
+			return std::make_unique<MSTAlgorithm>();
+		case "SCC":
+			return std::make_unique<SCCAlgorithm>();
+		case "MAXFLOW":
+			return std::make_unique<MaxFlowAlgorithm>();
+		case "MAXCLIQUE":
+			return std::make_unique<MaxCliqueAlgorithm>();
+		default:
+			return nullptr;
+	}
 }
