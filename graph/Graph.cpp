@@ -6,10 +6,17 @@
 
 #include "Graph.h"
 #include <stdexcept>
+#include <strstream>
 
 Graph::Graph(int vertices, bool directed)
     : m_vertices(vertices), m_directed(directed), m_adj(vertices)
 {
+}
+
+Graph::Graph(const Graph &graph) {
+    m_vertices = graph.m_vertices;
+    m_directed = graph.m_directed;
+    m_adj = graph.m_adj;
 }
 
 void Graph::addEdge(int u, int v, int weight) {
@@ -39,4 +46,43 @@ Graph Graph::reversed() const {
         rev.m_adj = m_adj;
     }
     return rev;
+}
+
+std::string to_string(const Graph &g) {
+    std::ostrstream s;
+    s << g.numVertices() << ' ' << g.isDirected() << std::endl;
+    for (int u = 0; u < g.numVertices(); ++u) {
+        for (const auto &[v, w] : g.neighbours(u))
+            s << ' ' << v << ' ' << w;
+        s << std::endl;
+    }
+    return s.str();
+}
+
+Graph from_string(const std::string& str) {
+    std::istringstream in(str);
+    int vertices;
+    bool directed;
+
+    if (!(in >> vertices >> directed)) {
+        throw std::runtime_error("Invalid graph format: missing header");
+    }
+
+    Graph graph(vertices, directed); // assuming constructor Graph(int vertices, bool directed)
+
+    for (int u = 0; u < vertices; ++u) {
+        std::string line;
+        if (!std::getline(in >> std::ws, line))
+            throw std::runtime_error("Invalid graph format: missing adjacency list");
+
+        std::istringstream lin(line);
+        int v, w;
+        while (lin >> v >> w)
+            graph.addEdge(u, v, w);
+
+        if (!lin.eof())
+            throw std::runtime_error("Invalid graph format: bad adjacency entry");
+    }
+
+    return graph;
 }

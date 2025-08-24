@@ -4,6 +4,10 @@
 
 #pragma once
 
+#include <ostream>
+#include <sstream>
+#include <string>
+#include <strstream>
 #include <vector>
 #include <utility>
 
@@ -17,7 +21,9 @@ public:
     // Construct a graph with a given number of vertices.  By default
     // the graph is undirected.  Passing directed=true will build a
     // directed graph.
-    Graph(int vertices = 0, bool directed = false);
+    explicit Graph(int vertices = 0, bool directed = false);
+
+    Graph(const Graph& graph);
 
     // Add an edge between u and v with an optional weight (default
     // weight = 1).  The vertices must be in the range [0, n-1].  If
@@ -51,3 +57,8 @@ private:
     bool m_directed;
     std::vector<std::vector<std::pair<int, int>>> m_adj;
 };
+
+
+std::string to_string(const Graph& g);
+
+Graph from_string(const std::string& str);
