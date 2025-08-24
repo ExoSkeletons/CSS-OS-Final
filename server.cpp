@@ -1,13 +1,20 @@
 #include <csignal>
 #include <cstring>
 #include <iostream>
-#include <ranges>
+#include <sstream>
 #include <unistd.h>
 #include <vector>
 #include <arpa/inet.h>
 #include <sys/poll.h>
 
 #include "fd_polling.hpp"
+#include "pthread_patterns.hpp"
+#include "graph/EulerAlgorithm.h"
+#include "graph/Graph.h"
+#include "graph/MaxCliqueAlgorithm.h"
+#include "graph/MaxFlowAlgorithm.h"
+#include "graph/RandomGraph.h"
+#include "graph/SCCAlgorithm.h"
 
 using namespace std;
 
@@ -23,11 +30,96 @@ void lower(char *p) { for (; *p; ++p) *p = (char) tolower(*p); }
 bool streq(const char *p1, const char *p2) { return strcmp(p1, p2) == 0; }
 
 
-// global data
-// vector<geo::Point2D> graph;
-// data modification protection mutex
-pthread_mutex_t graph_modify_mutex;
+string fmtAlgoRes(const Algorithm &algorithm, const string &result) {
+	return "\t" + algorithm.name() + " := " + result + "\n";
+}
 
+namespace graph_lf {
+	struct GraphWork {
+		fd_t requester = -1;
+		Graph *graph{};
+		Algorithm *algorithm{};
+		string *answer{};
+
+		~GraphWork() {
+			delete graph;
+			delete algorithm;
+			delete answer;
+		}
+
+		static void *compute_r(void *arg) {
+			const auto p = (GraphWork *) arg;
+			return new string(p->algorithm->run(*p->graph));
+		}
+
+		static void compute(void *arg) {
+			const auto p = (GraphWork *) arg;
+			p->answer = (string *) compute_r(arg);
+		}
+
+		static void *commit(void *arg) {
+			const auto p = (GraphWork *) arg;
+
+			dprintf(p->requester, fmtAlgoRes(*p->algorithm, *p->answer).c_str());
+
+			delete p;
+
+			return nullptr;
+		}
+	};
+};
+
+namespace graph_pl {
+	class GraphPayload {
+	public:
+		const Graph *graph{};
+		vector<string> answers;
+
+		explicit GraphPayload(const Graph &g) : graph(new Graph(g)) {
+		}
+
+		~GraphPayload() {
+			delete graph;
+		}
+	};
+
+	typedef pl::Pipeline<fd_t, GraphPayload> GraphAlgoPipeline;
+
+	namespace workers {
+		namespace alg {
+			void mc(const GraphAlgoPipeline::Work *work) {
+				auto algo = MaxCliqueAlgorithm();
+				work->payload->answers.push_back(fmtAlgoRes(algo, algo.run(*work->payload->graph)));
+			}
+
+			void mf(const GraphAlgoPipeline::Work *work) {
+				auto algo = MaxFlowAlgorithm();
+				work->payload->answers.push_back(fmtAlgoRes(algo, algo.run(*work->payload->graph)));
+			}
+
+			void eu(const GraphAlgoPipeline::Work *work) {
+				auto algo = EulerAlgorithm();
+				work->payload->answers.push_back(fmtAlgoRes(algo, algo.run(*work->payload->graph)));
+			}
+
+			void sc(const GraphAlgoPipeline::Work *work) {
+				auto algo = SCCAlgorithm();
+				work->payload->answers.push_back(fmtAlgoRes(algo, algo.run(*work->payload->graph)));
+			}
+		};
+
+		void send_results(const GraphAlgoPipeline::Work *work) {
+			for (const auto &answer: work->payload->answers)
+				dprintf(work->context, "%s\n", answer.c_str());
+			work->payload->answers.clear();
+		}
+	};
+};
+
+// client job thread manager
+auto job_handler = lf::LF(3);
+auto pipeline_handler = graph_pl::GraphAlgoPipeline();
+vector<graph_pl::GraphAlgoPipeline::Stage> graph_pipeline_stages;
 
 // client fds
 vector<fd_t> client_fds;
@@ -41,6 +133,11 @@ void safe_exit(const int sig) {
 	// stop server client connection proactor
 	proactor::stopProactor(client_connection_proactor);
 
+	// wait for jobs to finish
+	job_handler.complete();
+	// stop job thread manager
+	job_handler.stop();
+
 	// close all fds
 	pthread_mutex_lock(&fds_modify_mutex);
 	for (const auto client: client_fds) {
@@ -51,20 +148,65 @@ void safe_exit(const int sig) {
 
 	// cleanup mutexes
 	pthread_mutex_destroy(&fds_modify_mutex);
-	pthread_mutex_destroy(&graph_modify_mutex);
 
 	// exit
 	exit(sig);
 }
 
 
-void parse_command_client(const fd_t response_fd, const char *command, const char *buff) {
-	if (streq(command, "newgraph")) {
-		pthread_mutex_lock(&graph_modify_mutex);
-		// graph.clear();
-		pthread_mutex_unlock(&graph_modify_mutex);
+void run_algos_lf(const Graph &graph, const fd_t response_fd) {
+	printf("run_algos_lf for fd %d\n", response_fd);
+	const auto payloads = vector{
+		new graph_lf::GraphWork{response_fd, new Graph(graph), new MaxCliqueAlgorithm()},
+		new graph_lf::GraphWork{response_fd, new Graph(graph), new EulerAlgorithm()},
+		new graph_lf::GraphWork{response_fd, new Graph(graph), new MaxFlowAlgorithm()},
+		new graph_lf::GraphWork{response_fd, new Graph(graph), new SCCAlgorithm()}
+	};
+	for (const auto p: payloads)
+		job_handler.run({
+			{graph_lf::GraphWork::compute_r, p, (void **) &p->answer},
+			{graph_lf::GraphWork::commit, p}
+		});
+}
 
-		dprintf(response_fd, "reset graph\n");
+void run_algos_pl(const Graph &graph, const fd_t response_fd) {
+	printf("run_algos_pl for fd %d\n", response_fd);
+	graph_pl::GraphAlgoPipeline::Job algo_job;
+	algo_job.setWork(response_fd, new graph_pl::GraphPayload(graph));
+	for (const auto stage: graph_pipeline_stages)
+		algo_job.addStage(stage);
+	algo_job.start();
+}
+
+
+void parse_command_client(const fd_t response_fd, const char *command, const char *args) {
+	Graph graph;
+	if (streq(command, "newgraph")) {
+		int v = 0, e = 0, mw = 0, Mw = 0;
+		bool directed = false;
+		try {
+			dprintf(response_fd, "newgraph args %s\n", args);
+			istringstream in(args);
+			string cmd;
+			in >> cmd >> v >> e >> mw >> Mw;
+			graph = generateRandomGraph(v, e, directed, mw, Mw, time(nullptr));
+			dprintf(response_fd,
+			        "generated new random %s graph with %d vtx, %d edges:\n",
+			        (directed ? "directed" : ""), v, e
+			);
+			dprintf(response_fd, "\t%s\n", to_string_human(graph).c_str());
+			run_algos_lf(graph, response_fd);
+		} catch (exception &ex) {
+			dprintf(response_fd, "failed to generate graph: %s\n", ex.what());
+		}
+	} else if (streq(command, "graph")) {
+		// parse graph
+		try {
+			graph = from_string(std::string(args));
+			run_algos_lf(graph, response_fd);
+		} catch (exception &ex) {
+			dprintf(response_fd, "failed to parse graph: %s", ex.what());
+		}
 	} else dprintf(response_fd, "unknown command \"%s\"\n", command);
 }
 
@@ -184,11 +326,22 @@ int main() {
 	signal(SIGINT, safe_exit);
 
 	// init mutexes
-	pthread_mutex_init(&graph_modify_mutex, nullptr);
 	pthread_mutex_init(&fds_modify_mutex, nullptr);
 
 	// create server socket
 	const fd_t server_socket = setup_server();
+
+	// start client job thread manager
+	job_handler.start();
+	// setup client job pipeline
+	graph_pipeline_stages = {
+		pipeline_handler.startActiveObject(graph_pl::workers::alg::mc),
+		pipeline_handler.startActiveObject(graph_pl::workers::alg::eu),
+		pipeline_handler.startActiveObject(graph_pl::workers::alg::mf),
+		pipeline_handler.startActiveObject(graph_pl::workers::alg::sc),
+
+		pipeline_handler.startActiveObject(graph_pl::workers::send_results)
+	};
 
 	// start server client connection proactor
 	client_connection_proactor = proactor::startProactor(server_socket, handle_client);
