@@ -190,7 +190,7 @@ namespace pl {
 
 		public:
 			void setWork(Work *work) {
-				delete work;
+				delete this->work;
 				this->work = work;
 			}
 
