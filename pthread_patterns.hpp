@@ -108,13 +108,19 @@ namespace pl {
 
 					// Exit point
 					if (!self->active) {
+						while (self->workQueue.empty()) {
+							auto work_left = self->workQueue.front();
+							self->workQueue.pop();
+							delete work_left;
+						}
 						delete work;
 						break;
 					}
-					// No more stages left, cleanup work
+
 					if (work->stagesLeft.empty()) {
+						// No more stages left, work is exhausted. Cleanup
 						delete work;
-						break;
+						continue;
 					}
 
 					// Queue up work to next object
