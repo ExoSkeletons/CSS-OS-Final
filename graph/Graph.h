@@ -58,4 +58,6 @@ private:
 
 std::string to_string(const Graph &g);
 
+std::string to_string_human(const Graph &g);
+
 Graph from_string(const std::string &str);
