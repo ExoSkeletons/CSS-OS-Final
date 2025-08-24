@@ -1,13 +1,10 @@
 #include <iostream>
 
+#include "fd_polling.hpp"
 #include "pthread_patterns.hpp"
 
 typedef pl::Pipeline<int, int> NumPipeline;
 
-
-int *s;
-int *p;
-int *m;
 
 void *sum(void *arg) {
 	const auto vals = (int *) arg;
@@ -38,17 +35,60 @@ void pipe_print(const NumPipeline::Work *work) {
 	std::cout << work->context << ": " << *work->payload << std::endl;
 }
 
+void *graph_bfs(void *arg) {
+	typedef int graph;
+	const auto g = (graph *) arg;
+	// do thing...
+	const std::string result = "result bfs"; // result from function...
+	return new std::string(result);
+}
+
+// for LF- pack result with this
+class client_result {
+public:
+	fd_t client = -1;
+	int *result = nullptr;
+
+	static void *send_result(void *arg) {
+		const auto cr = (client_result *) arg;
+		std::cout << "result " << *cr->result << " sent to " << cr->client << std::endl;
+		return nullptr;
+	}
+
+	~client_result() {
+		delete result;
+	}
+
+	client_result() = default;
+
+	explicit client_result(const fd_t client): client(client) {
+	}
+};
+
+
 int main() {
 	auto fs = lf::LF(6);
 
 	const auto args = new int[]{2, 45};
-	int rs, rm, rp;
+	const auto
+			rs = new client_result(22),
+			rm = new client_result(55),
+			rp = new client_result(7777);
 
 	fs.start();
-	fs.run({{sum, (void *) args, (void **) &rs}, {print, (void *) &rs, nullptr}});
-	fs.run({{mul, (void *) args, (void **) &rp}, {print, (void *) &rp, nullptr}});
-	fs.run({{min, (void *) args, (void **) &rm}, {print, (void *) &rm, nullptr}});
+	fs.run({
+		{sum, (void *) args, (void **) &rs->result}, {print, (void *) &rs->result, nullptr},
+		{client_result::send_result, (void *) rs, nullptr}
+	});
+	fs.run({{mul, (void *) args, (void **) &rp->result}, {print, (void *) &rp->result, nullptr}});
+	fs.run({
+		{min, (void *) args, (void **) &rm->result}, {print, (void *) &rm->result, nullptr},
+		{client_result::send_result, (void *) rm, nullptr}
+	});
 	fs.complete();
+	delete rs;
+	delete rp;
+	delete rm;
 	fs.stop();
 
 	NumPipeline p;
@@ -56,7 +96,7 @@ int main() {
 	const auto printer = p.startActiveObject(pipe_print);
 
 	auto job = NumPipeline::Job();
-	job.setContext(new pl::Pipeline<int, int>::Work(9999, new int(4)));
+	job.setWork(new NumPipeline::Work(9999, new int(4)));
 	job.addStage(printer);
 	job.addStage(adder);
 	job.addStage(printer);
