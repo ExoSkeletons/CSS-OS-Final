@@ -52,9 +52,10 @@ namespace pl {
 	template<class Context, class Payload>
 	class Pipeline {
 		class ActiveObject;
-		typedef ActiveObject *Stage;
 
 	public:
+		typedef ActiveObject *Stage;
+
 		struct Work {
 			Context context;
 			Payload *payload;
