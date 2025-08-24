@@ -188,7 +188,10 @@ namespace pl {
 			std::queue<Stage> stages = std::queue<Stage>();
 
 		public:
-			void setContext(Work *context) { this->work_context = context; }
+			void setContext(Work *context) {
+				delete work_context;
+				this->work_context = context;
+			}
 
 			void addStage(const Stage state) { stages.push(state); }
 
