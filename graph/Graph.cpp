@@ -5,6 +5,8 @@
 // efficiency.
 
 #include "Graph.h"
+
+#include <sstream>
 #include <stdexcept>
 #include <strstream>
 
