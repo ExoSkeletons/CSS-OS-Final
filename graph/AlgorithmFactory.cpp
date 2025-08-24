@@ -18,18 +18,15 @@ AlgorithmPtr createAlgorithm(const std::string &name) {
 	upper.reserve(name.size());
 	for (const char c: name)
 		upper.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-	switch (upper) {
-		case "EULER":
-			return std::make_unique<EulerAlgorithm>();
-		case "MST":
-			return std::make_unique<MSTAlgorithm>();
-		case "SCC":
-			return std::make_unique<SCCAlgorithm>();
-		case "MAXFLOW":
-			return std::make_unique<MaxFlowAlgorithm>();
-		case "MAXCLIQUE":
-			return std::make_unique<MaxCliqueAlgorithm>();
-		default:
-			return nullptr;
-	}
+	if (upper == "EULER")
+		return std::make_unique<EulerAlgorithm>();
+	if (upper == "MST")
+		return std::make_unique<MSTAlgorithm>();
+	if (upper == "SCC")
+		return std::make_unique<SCCAlgorithm>();
+	if (upper == "MAXFLOW")
+		return std::make_unique<MaxFlowAlgorithm>();
+	if (upper == "MAXCLIQUE")
+		return std::make_unique<MaxCliqueAlgorithm>();
+	return nullptr;
 }
