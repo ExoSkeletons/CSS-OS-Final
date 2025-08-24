@@ -36,10 +36,10 @@ Graph generateRandomGraph(int vertices, int edges, bool directed,
     std::uniform_int_distribution<int> vertexDist(0, vertices - 1);
     // Keep track of existing edges to avoid duplicates
     std::set<std::pair<int,int>> used;
-    int added = 0;
-    while (added < edges) {
+    while (used.size() < edges) {
         int u = vertexDist(rng);
         int v = vertexDist(rng);
+        if (u == v) continue;
         // For undirected graphs ensure (u,v) and (v,u) considered same
         std::pair<int,int> key;
         if (directed) {
@@ -47,11 +47,11 @@ Graph generateRandomGraph(int vertices, int edges, bool directed,
         } else {
             if (u <= v) key = {u, v}; else key = {v, u};
         }
-        if (used.find(key) != used.end()) continue;
+        if (used.contains(key))
+            continue;
         used.insert(key);
         int w = weightDist(rng);
         g.addEdge(u, v, w);
-        added++;
     }
     return g;
 }
