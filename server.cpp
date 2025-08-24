@@ -110,7 +110,7 @@ namespace graph_pl {
 
 		void send_results(const GraphAlgoPipeline::Work *work) {
 			for (const auto &answer: work->payload->answers)
-				dprintf(work->context, "%s\n", answer.c_str());
+				dprintf(work->context, "%s", answer.c_str());
 			work->payload->answers.clear();
 		}
 	};
@@ -190,12 +190,9 @@ void parse_command_client(const fd_t response_fd, const char *command, const cha
 			string cmd;
 			in >> cmd >> v >> e >> mw >> Mw;
 			graph = generateRandomGraph(v, e, directed, mw, Mw, time(nullptr));
-			dprintf(response_fd,
-			        "generated new random %s graph with %d vtx, %d edges:\n",
-			        (directed ? "directed" : ""), v, e
-			);
-			dprintf(response_fd, "\t%s\n", to_string_human(graph).c_str());
-			run_algos_lf(graph, response_fd);
+			dprintf(response_fd, "generated new random graph:\n\t%s\n", to_string_human(graph).c_str());
+			// run_algos_lf(graph, response_fd);
+			run_algos_pl(graph, response_fd);
 		} catch (exception &ex) {
 			dprintf(response_fd, "failed to generate graph: %s\n", ex.what());
 		}
