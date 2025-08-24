@@ -5,7 +5,6 @@
 #include <atomic>
 #include <cstdio>
 #include <iostream>
-#include <ostream>
 #include <pthread.h>
 #include <queue>
 #include <vector>
@@ -85,7 +84,7 @@ namespace pl {
 				const auto self = (ActiveObject *) arg;
 
 				while (self->active) {
-					// wait for work on queue
+					// Wait for work on queue
 					pthread_mutex_lock(&self->task_mutex);
 					while (self->workQueue.empty() && self->active)
 						pthread_cond_wait(&self->task_cond, &self->task_mutex);
@@ -94,32 +93,34 @@ namespace pl {
 						break;
 					}
 
-					// consume work from queue
-					const auto work_context = self->workQueue.front();
+					// Consume work from queue
+					const auto work = self->workQueue.front();
 					self->workQueue.pop();
 					pthread_mutex_unlock(&self->task_mutex);
 
-					// do work
+					// Do work
 					/*
 					std::cout <<
 							"worker [" << pthread_self() << "] starting work with- " <<
 							"(c:" << work_context->context << ",p:" << *work_context->payload << ")" << std::endl;
 					*/
-					self->worker(work_context);
+					self->worker(work);
 
+					// Exit point
 					if (!self->active) {
-						delete work_context;
+						delete work;
+						break;
+					}
+					// No more stages left, cleanup work
+					if (work->stagesLeft.empty()) {
+						delete work;
 						break;
 					}
 
-					// send work to next object
-					if (work_context->stagesLeft.empty())
-						delete work_context;
-					else {
-						const auto next_object = work_context->stagesLeft.front();
-						work_context->stagesLeft.pop();
-						next_object->enqueue(work_context);
-					}
+					// Queue up work to next object
+					const auto next_object = work->stagesLeft.front();
+					work->stagesLeft.pop();
+					next_object->enqueue(work);
 				}
 
 				return nullptr;
@@ -183,24 +184,28 @@ namespace pl {
 		}
 
 		class Job {
-			Work *work_context{};
+			Work *work{};
 
 			std::queue<Stage> stages = std::queue<Stage>();
 
 		public:
-			void setContext(Work *context) {
-				delete work_context;
-				this->work_context = context;
+			void setWork(Work *work) {
+				delete work;
+				this->work = work;
 			}
 
-			void addStage(const Stage state) { stages.push(state); }
+			void setWork(Context context, Payload *payload) {
+				setWork(new Work(context, payload));
+			}
+
+			void addStage(const Stage stage) { stages.push(stage); }
 
 			void start() {
 				if (stages.empty()) return;
-				work_context->stagesLeft = stages;
+				work->stagesLeft = stages;
 				auto first_stage = stages.front();
-				work_context->stagesLeft.pop();
-				first_stage->enqueue(work_context);
+				work->stagesLeft.pop();
+				first_stage->enqueue(work);
 			}
 		};
 
