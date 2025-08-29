@@ -9,7 +9,7 @@ add_library(pthread_patterns SHARED pthread_patterns.cpp)
 
 add_subdirectory(graph)
 
-add_executable(main main.cpp)
+add_executable(main pthp_demo.cpp)
 target_link_libraries(main PRIVATE graph pthread_patterns fd_polling)
 
 add_executable(server server.cpp)
