@@ -4,12 +4,9 @@ CXXFLAGS := -std=c++20 -Wall -fPIC
 COVERAGE_FLAGS := -fprofile-arcs -ftest-coverage
 
 # ---- Linker setup ----
-# linker search paths + runtime search paths
 LDFLAGS  := -L. -Lgraph \
             -Wl,-rpath,'$$ORIGIN' \
             -Wl,-rpath,'$$ORIGIN/graph'
-
-# libraries to link against
 LDLIBS   := -lpthread
 
 # ---- Project structure ----
@@ -52,19 +49,9 @@ helgrind: server
 callgrind: server
 	valgrind --tool=callgrind ./server
 
-
-# ---- Coverage ----
-server_cov:
-	# Inject coverage flags into making of server
-	$(MAKE) CXXFLAGS="$(CXXFLAGS) $(COVERAGE_FLAGS)" LDFLAGS="$(LDFLAGS) $(COVERAGE_FLAGS)" server
-	 # Start server. Ideally we then start some clients and connect to it to do some work.
-	./server
-	lcov --capture --directory ./ --output-file coverage.info
-	genhtml coverage.info --output-directory coverage_report
-
 # ---- Cleanup ----
 clean:
-	rm -f $(EXES) graph_demo *.o *.so
-	$(MAKE) -C graph clean
+	rm -f $(EXES) *.o *.so
+	$(MAKE) -C ./graph clean
 
-.PHONY: all clean valgrind helgrind callgrind graph_demo
+.PHONY: all clean valgrind helgrind callgrind server_cov
