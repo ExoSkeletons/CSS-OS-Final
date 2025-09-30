@@ -51,7 +51,7 @@ callgrind: server
 
 # ---- Cleanup ----
 clean:
-	rm -f $(EXES) *.o *.so
+	rm -f $(EXES) *.o *.so *.gcno
 	$(MAKE) -C ./graph clean
 
 .PHONY: all clean valgrind helgrind callgrind server_cov
