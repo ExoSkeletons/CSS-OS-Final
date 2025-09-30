@@ -60,6 +60,7 @@ namespace graph_lf {
 		static void *commit(void *arg) {
 			const auto p = (GraphWork *) arg;
 
+			// send string answer to client fd requester
 			dprintf(p->requester, fmtAlgoRes(*p->algorithm, *p->answer).c_str());
 
 			delete p;
